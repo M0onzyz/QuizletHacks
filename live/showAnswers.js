@@ -19,7 +19,7 @@
         return undefined;
     }
 
-    let currentQuestion = findByKey(document.querySelector('#__next > :nth-child(3) > div'), 'currentQuestion');
+    let currentQuestion = findByKey(document.querySelector('[data-testid="normalPrompt"]'), 'currentQuestion');
     if (!currentQuestion) return;
 
     let term = currentQuestion.cardSides[0].media[0].plainText;
