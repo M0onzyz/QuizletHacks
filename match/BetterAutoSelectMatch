@@ -1,5 +1,6 @@
 // A more reliable script with a longer delay between card pairs
 // This version is slower but ensures proper selection
+// Recommended delay: 400, min delay: 300 (Does Depend On Device)
 (() => {
     const hack = () => {
         if (document.querySelectorAll('.FormattedText').length != 12) {
@@ -71,7 +72,7 @@
                 }, 100);
             }, delay);
 
-            delay += 500;
+            delay += 400;
 
             if (isTerm) blacklist.push(defin);
             else if (isDef) blacklist.push(term);
