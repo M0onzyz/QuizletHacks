@@ -113,8 +113,8 @@
     // State variables
     let highlightEnabled = false;
     let autoSelectEnabled = false;
+    let highlightIntervalId = null;
     let autoSelectIntervalId = null;
-    let checkIntervalId = null;
 
     // Update the displayed value when the slider changes
     speedSlider.addEventListener('input', () => {
@@ -125,10 +125,13 @@
     highlightToggleButton.addEventListener('click', () => {
         highlightEnabled = !highlightEnabled;
         highlightToggleButton.classList.toggle('active', highlightEnabled);
-        console.log(`Highlighting is now ${highlightEnabled ? 'on' : 'off'}.`);
+
         if (highlightEnabled) {
             hack(true);
+            highlightIntervalId = setInterval(() => hack(true), 1000);
         } else {
+            clearInterval(highlightIntervalId);
+            highlightIntervalId = null;
             document.querySelectorAll('.FormattedText').forEach(el => {
                 el.style.border = '';
                 el.style.borderRadius = '';
@@ -140,40 +143,24 @@
     autoSelectToggleButton.addEventListener('click', () => {
         autoSelectEnabled = !autoSelectEnabled;
         autoSelectToggleButton.classList.toggle('active', autoSelectEnabled);
-        console.log(`Auto-selecting is now ${autoSelectEnabled ? 'on' : 'off'}.`);
-
-        if (checkIntervalId) {
-            clearInterval(checkIntervalId);
-            checkIntervalId = null;
-        }
-        if (autoSelectIntervalId) {
-            clearInterval(autoSelectIntervalId);
-            autoSelectIntervalId = null;
-        }
+        
+        clearInterval(highlightIntervalId);
+        clearInterval(autoSelectIntervalId);
+        highlightIntervalId = null;
+        autoSelectIntervalId = null;
 
         if (autoSelectEnabled) {
-            checkIntervalId = setInterval(checkAndRunHack, 500);
-        }
-    });
-
-    const checkAndRunHack = () => {
-        if (document.querySelectorAll('.FormattedText').length === 12) {
-            console.log("Elements found. Starting auto-selection.");
-            clearInterval(checkIntervalId);
-            checkIntervalId = null;
-            
             autoSelectIntervalId = setInterval(() => {
                 hack(false);
             }, parseInt(speedSlider.value, 10));
-            
-            hack(false);
-        } else {
-            console.log("Waiting for elements...");
+        } else if (highlightEnabled) {
+            highlightIntervalId = setInterval(() => hack(true), 1000);
         }
-    };
+    });
 
     const hack = (isHighlightOnly = false) => {
-        if (document.querySelectorAll('.FormattedText').length !== 12) {
+        const textElements = document.querySelectorAll('.FormattedText');
+        if (textElements.length !== 12) {
             return;
         }
 
@@ -181,64 +168,62 @@
         try {
             setData = JSON.parse(__NEXT_DATA__.props.pageProps.dehydratedReduxStateKey);
         } catch (e) {
-            console.error("Failed to parse data.", e);
+            console.error("Failed to parse data. Quizlet may have updated.", e);
             return;
         }
         
         let cards = setData.studyModesCommon.studiableData.studiableItems;
         let blacklist = [];
-        let find = (ig) => [...document.querySelectorAll('.FormattedText')].find((i) => ig.startsWith(i.innerText.replace('…', '')));
+        let find = (ig) => [...textElements].find((i) => ig.startsWith(i.innerText.replace('…', '')) || ig === i.innerText);
         const colors = ['#FF007F', '#FFAA1D', '#FFF000', '#66FF00', '#08E8DE', '#1974D2'];
         let colorIndex = 0;
         let delay = 0;
         const selectedSpeed = parseInt(speedSlider.value, 10);
 
-        for (let i = 0; i < 12; i++) {
-            let text = document.querySelectorAll('.FormattedText')[i].innerText;
+        for (let i = 0; i < textElements.length; i++) {
+            let text = textElements[i].innerText;
             if (blacklist.includes(text)) continue;
 
             let needStartsWith = text.endsWith('…');
             let card = cards.find((card) => card.cardSides.some((side) => {
                 if (needStartsWith) return side.media[0].plainText.startsWith(text.replace('…', ''))
-                else return side.media[0].plainText == text
+                else return side.media[0].plainText === text
             }));
             
             if (!card) continue;
 
-            let termSide = card.cardSides.find((side) => side.label == 'word');
-            let definSide = card.cardSides.find((side) => (side.label == 'definition' || side.label == 'example'));
+            let termSide = card.cardSides.find((side) => side.label === 'word');
+            let definSide = card.cardSides.find((side) => (side.label === 'definition' || side.label === 'example'));
             
             if (!termSide || !definSide) continue;
 
             let term = termSide.media[0].plainText;
             let defin = definSide.media[0].plainText;
-            let isTerm = term == text;
-            let isDef = defin == text;
+            
             const termElement = find(term);
             const definElement = find(defin);
+            
+            if (!termElement || !definElement) continue;
 
-            if (highlightEnabled) {
-                if (termElement) {
-                    termElement.style.border = `2px solid ${colors[colorIndex]}`;
-                    termElement.style.borderRadius = '15px';
-                }
-                if (definElement) {
-                    definElement.style.border = `2px solid ${colors[colorIndex]}`;
-                    definElement.style.borderRadius = '15px';
-                }
-                colorIndex++;
-            }
-
-            if (!isHighlightOnly && autoSelectEnabled) {
-                setTimeout(() => {
-                    if (termElement) termElement.click();
+            if (isHighlightOnly) {
+                termElement.style.border = `2px solid ${colors[colorIndex]}`;
+                termElement.style.borderRadius = '15px';
+                definElement.style.border = `2px solid ${colors[colorIndex]}`;
+                definElement.style.borderRadius = '15px';
+                // Only increment the color index after a complete pair is found and styled
+                colorIndex = (colorIndex + 1) % colors.length;
+                blacklist.push(term, defin);
+            } else if (autoSelectEnabled) {
+                if (!blacklist.includes(term) && !blacklist.includes(defin)) {
                     setTimeout(() => {
-                        if (definElement) definElement.click();
-                    }, 100);
-                }, delay);
-                delay += selectedSpeed;
-                if (isTerm) blacklist.push(defin);
-                else if (isDef) blacklist.push(term);
+                        termElement.click();
+                        setTimeout(() => {
+                            definElement.click();
+                        }, 100);
+                    }, delay);
+                    delay += selectedSpeed;
+                    blacklist.push(term, defin);
+                }
             }
         }
     };
